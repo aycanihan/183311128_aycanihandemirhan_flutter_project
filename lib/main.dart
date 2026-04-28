@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -651,9 +653,44 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _register() async {
+    if (_nameController.text.isEmpty || _emailController.text.isEmpty || _passwordController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tüm alanları doldurun'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+    if (_passwordController.text.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Şifre en az 6 karakter olmalı'), backgroundColor: Colors.red),
+      );
+      return;
+    }
     setState(() => _isLoading = true);
-    await Future.delayed(const Duration(seconds: 1));
-    setState(() => _isLoading = false);
-    if (mounted) context.go('/discover');
+    try {
+      final credential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+      await credential.user?.updateDisplayName(_nameController.text.trim());
+
+      await FirebaseFirestore.instance.collection('users').doc(credential.user!.uid).set({
+        'name': _nameController.text.trim(),
+        'email': _emailController.text.trim(),
+        'role': _selectedRole,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      if (mounted) context.go('/discover');
+    } on FirebaseAuthException catch (e) {
+      String message = 'Bir hata oluştu';
+      if (e.code == 'email-already-in-use') message = 'Bu email zaten kayıtlı';
+      if (e.code == 'weak-password') message = 'Şifre çok zayıf';
+      if (e.code == 'invalid-email') message = 'Geçersiz email';
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 }
