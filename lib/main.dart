@@ -8,12 +8,15 @@ import 'firebase_options.dart';
 class AppColors {
   static const bgPrimary = Color(0xFF060610);
   static const bgSecondary = Color(0xFF0F0F1E);
+  static const bgCard = Color(0xFF0D0D22);
   static const purple = Color(0xFF7C3AED);
   static const purpleLight = Color(0xFFA855F7);
   static const pink = Color(0xFFEC4899);
   static const textPrimary = Color(0xFFFFFFFF);
+  static const textSecondary = Color(0x80FFFFFF);
   static const textTertiary = Color(0x40FFFFFF);
   static const borderSubtle = Color(0x15FFFFFF);
+  static const borderLight = Color(0x25FFFFFF);
 }
 
 // ── SCREENS ──
@@ -122,8 +125,12 @@ class _NavItem extends StatelessWidget {
 
 // ── ROUTER ──
 final _router = GoRouter(
-  initialLocation: '/discover',
+  initialLocation: '/login',
   routes: [
+    GoRoute(
+      path: '/login',
+      builder: (context, state) => const LoginScreen(),
+    ),
     ShellRoute(
       builder: (context, state, child) => MainShell(child: child),
       routes: [
@@ -170,5 +177,262 @@ class EtkinlikApp extends StatelessWidget {
       ),
       routerConfig: _router,
     );
+  }
+}
+
+// ── LOGIN SCREEN ──
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
+
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _isLoading = false;
+  bool _obscurePassword = true;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.bgPrimary,
+      body: Stack(
+        children: [
+          // Gradient arka plan
+          Positioned(
+            top: -100,
+            left: -60,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [AppColors.purple.withOpacity(0.6), Colors.transparent],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 50,
+            right: -60,
+            child: Container(
+              width: 240,
+              height: 240,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [AppColors.pink.withOpacity(0.5), Colors.transparent],
+                ),
+              ),
+            ),
+          ),
+          // İçerik
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 60),
+                  // Başlık
+                  const Text(
+                    'Tekrar\nhoş geldin.',
+                    style: TextStyle(
+                      fontSize: 36,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary,
+                      letterSpacing: -1.0,
+                      height: 1.1,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Etkinlikleri keşfetmek için giriş yap',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 48),
+                  // Email field
+                  _buildTextField(
+                    controller: _emailController,
+                    hint: 'E-posta',
+                    icon: Icons.mail_outline_rounded,
+                  ),
+                  const SizedBox(height: 12),
+                  // Şifre field
+                  _buildTextField(
+                    controller: _passwordController,
+                    hint: 'Şifre',
+                    icon: Icons.lock_outline_rounded,
+                    isPassword: true,
+                  ),
+                  const SizedBox(height: 32),
+                  // Giriş yap butonu
+                  _isLoading
+                      ? const Center(child: CircularProgressIndicator(color: AppColors.purple))
+                      : _buildGradientButton(
+                          text: 'Giriş Yap',
+                          onTap: _login,
+                        ),
+                  const SizedBox(height: 16),
+                  // Google butonu
+                  _buildGoogleButton(),
+                  const SizedBox(height: 24),
+                  // Kayıt ol
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text(
+                        'Hesabın yok mu? ',
+                        style: TextStyle(color: AppColors.textTertiary, fontSize: 13),
+                      ),
+                      GestureDetector(
+                        onTap: () => context.go('/register'),
+                        child: const Text(
+                          'Kayıt ol',
+                          style: TextStyle(
+                            color: AppColors.purpleLight,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
+    bool isPassword = false,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.bgCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.borderSubtle),
+      ),
+      child: TextField(
+        controller: controller,
+        obscureText: isPassword ? _obscurePassword : false,
+        style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 14),
+          prefixIcon: Icon(icon, color: AppColors.textTertiary, size: 20),
+          suffixIcon: isPassword
+              ? GestureDetector(
+                  onTap: () => setState(() => _obscurePassword = !_obscurePassword),
+                  child: Icon(
+                    _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                    color: AppColors.textTertiary,
+                    size: 20,
+                  ),
+                )
+              : null,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGradientButton({required String text, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        height: 52,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: const LinearGradient(
+            colors: [AppColors.purple, AppColors.purpleLight, AppColors.pink],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.purple.withOpacity(0.4),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Center(
+          child: Text(
+            text,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.3,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGoogleButton() {
+    return GestureDetector(
+      onTap: _googleLogin,
+      child: Container(
+        width: double.infinity,
+        height: 52,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          color: AppColors.bgCard,
+          border: Border.all(color: AppColors.borderLight),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 20,
+              height: 20,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  colors: [Colors.red, Colors.blue],
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Text(
+              'Google ile devam et',
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _login() async {
+    setState(() => _isLoading = true);
+    // Firebase auth gelecek
+    await Future.delayed(const Duration(seconds: 1));
+    setState(() => _isLoading = false);
+    if (mounted) context.go('/discover');
+  }
+
+  Future<void> _googleLogin() async {
+    // Google sign in gelecek
+    if (mounted) context.go('/discover');
   }
 }
