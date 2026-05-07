@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'firebase_options.dart';
 
 // ── COLORS ──
@@ -323,13 +324,238 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
   }
 }
 
-class TicketsScreen extends StatelessWidget {
+class TicketsScreen extends StatefulWidget {
   const TicketsScreen({super.key});
   @override
+  State<TicketsScreen> createState() => _TicketsScreenState();
+}
+
+class _TicketsScreenState extends State<TicketsScreen> {
+  @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      backgroundColor: AppColors.bgPrimary,
-      body: Center(child: Text('Biletlerim', style: TextStyle(color: Colors.white, fontSize: 24))),
+    return StreamBuilder(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, authSnapshot) {
+        final userId = authSnapshot.data?.uid ?? '';
+
+        return Scaffold(
+          backgroundColor: AppColors.bgPrimary,
+          body: Stack(
+            children: [
+              Positioned(top: -60, right: -40, child: Container(width: 200, height: 200, decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(colors: [AppColors.purple.withOpacity(0.35), Colors.transparent])))),
+              Positioned(bottom: 100, left: -40, child: Container(width: 160, height: 160, decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(colors: [AppColors.pink.withOpacity(0.25), Colors.transparent])))),
+              SafeArea(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Biletlerim', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.textPrimary, letterSpacing: -0.5)),
+                          StreamBuilder<QuerySnapshot>(
+                            stream: FirebaseFirestore.instance.collection('tickets').snapshots(),
+                            builder: (context, snapshot) {
+                              final count = snapshot.data?.docs.length ?? 0;
+                              return Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(colors: [AppColors.purple, AppColors.pink]),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text('$count bilet', style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w600)),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: StreamBuilder<QuerySnapshot>(
+                              stream: FirebaseFirestore.instance
+                                  .collection('tickets')
+                                  .snapshots(),
+                              builder: (context, snapshot) {
+                                if (snapshot.connectionState == ConnectionState.waiting) {
+                                  return const Center(child: CircularProgressIndicator(color: AppColors.purple));
+                                }
+                                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                                  return Center(
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Container(
+                                          width: 80, height: 80,
+                                          decoration: BoxDecoration(color: AppColors.bgCard, borderRadius: BorderRadius.circular(20), border: Border.all(color: AppColors.borderSubtle)),
+                                          child: const Icon(Icons.confirmation_number_outlined, size: 36, color: AppColors.textTertiary),
+                                        ),
+                                        const SizedBox(height: 16),
+                                        const Text('Henüz biletiniz yok', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                                        const SizedBox(height: 8),
+                                        const Text('Etkinlikleri keşfet ve bilet al', style: TextStyle(fontSize: 13, color: AppColors.textTertiary)),
+                                        const SizedBox(height: 20),
+                                        GestureDetector(
+                                          onTap: () => context.go('/discover'),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                                            decoration: BoxDecoration(gradient: const LinearGradient(colors: [AppColors.purple, AppColors.pink]), borderRadius: BorderRadius.circular(12)),
+                                            child: const Text('Etkinlikleri Keşfet', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }
+
+                                final tickets = snapshot.data!.docs;
+                                return ListView.builder(
+                                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+                                  itemCount: tickets.length,
+                                  itemBuilder: (context, index) {
+                                    final ticket = tickets[index].data() as Map<String, dynamic>;
+                                    final ticketId = tickets[index].id;
+                                    return _buildTicketCard(ticket, ticketId);
+                                  },
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTicketCard(Map<String, dynamic> ticket, String ticketId) {
+    final isVip = ticket['ticketType'] == 'VIP Alan';
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [BoxShadow(color: AppColors.purple.withOpacity(0.2), blurRadius: 20, offset: const Offset(0, 8))],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: isVip
+                      ? [const Color(0xFF160535), const Color(0xFF4c1d95), const Color(0xFF7c3aed), const Color(0xFFc026d3)]
+                      : [const Color(0xFF0d1f3c), const Color(0xFF1e3a7a), const Color(0xFF2563eb)],
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(child: Text(ticket['eventTitle'] ?? '', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: -0.3))),
+                      if (isVip)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(gradient: const LinearGradient(colors: [AppColors.purple, AppColors.pink]), borderRadius: BorderRadius.circular(20)),
+                          child: const Text('VIP', style: TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w800)),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      _infoItem('TARİH', ticket['eventDate'] ?? ''),
+                      const SizedBox(width: 20),
+                      _infoItem('SAAT', ticket['eventTime'] ?? ''),
+                      const SizedBox(width: 20),
+                      _infoItem('ADET', '${ticket['quantity']}x'),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            Row(
+              children: [
+                Container(width: 20, height: 20, decoration: const BoxDecoration(color: AppColors.bgPrimary, borderRadius: BorderRadius.only(topRight: Radius.circular(10), bottomRight: Radius.circular(10)))),
+                Expanded(child: LayoutBuilder(builder: (context, constraints) {
+                  return Flex(
+                    direction: Axis.horizontal,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: List.generate((constraints.constrainWidth() / 12).floor(), (index) => Container(width: 6, height: 1.5, color: AppColors.borderSubtle)),
+                  );
+                })),
+                Container(width: 20, height: 20, decoration: const BoxDecoration(color: AppColors.bgPrimary, borderRadius: BorderRadius.only(topLeft: Radius.circular(10), bottomLeft: Radius.circular(10)))),
+              ],
+            ),
+            Container(
+              padding: const EdgeInsets.all(16),
+              color: AppColors.bgCard,
+              child: Row(
+                children: [
+                  Container(
+                    width: 72, height: 72,
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
+                    child: QrImageView(data: ticketId, version: QrVersions.auto, backgroundColor: Colors.white),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(color: AppColors.purple.withOpacity(0.15), borderRadius: BorderRadius.circular(6), border: Border.all(color: AppColors.purple.withOpacity(0.3))),
+                          child: Text(ticket['ticketType'] ?? '', style: const TextStyle(fontSize: 11, color: AppColors.purpleLight, fontWeight: FontWeight.w600)),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(ticket['venue'] ?? '', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary), overflow: TextOverflow.ellipsis),
+                        const SizedBox(height: 4),
+                        Text('#${ticketId.substring(0, 8).toUpperCase()}', style: const TextStyle(fontSize: 11, color: AppColors.textTertiary, fontFamily: 'monospace')),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Container(width: 6, height: 6, decoration: const BoxDecoration(color: Color(0xFF34d399), shape: BoxShape.circle)),
+                            const SizedBox(width: 4),
+                            const Text('Aktif', style: TextStyle(fontSize: 11, color: Color(0xFF34d399), fontWeight: FontWeight.w500)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text('₺${(ticket['totalPrice'] as num).toStringAsFixed(0)}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.purpleLight)),
+                      const SizedBox(height: 4),
+                      const Text('toplam', style: TextStyle(fontSize: 10, color: AppColors.textTertiary)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _infoItem(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 9, color: Colors.white54, fontWeight: FontWeight.w700, letterSpacing: 0.08)),
+        const SizedBox(height: 2),
+        Text(value, style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w700)),
+      ],
     );
   }
 }
