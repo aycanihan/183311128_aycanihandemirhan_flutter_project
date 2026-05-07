@@ -340,6 +340,16 @@ class _TicketsScreenState extends State<TicketsScreen> {
 
         return Scaffold(
           backgroundColor: AppColors.bgPrimary,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            leading: Navigator.canPop(context)
+                ? IconButton(
+                    icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+                    onPressed: () => context.go('/profile'),
+                  )
+                : null,
+          ),
           body: Stack(
             children: [
               Positioned(top: -60, right: -40, child: Container(width: 200, height: 200, decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(colors: [AppColors.purple.withOpacity(0.35), Colors.transparent])))),
@@ -562,11 +572,200 @@ class _TicketsScreenState extends State<TicketsScreen> {
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
+
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      backgroundColor: AppColors.bgPrimary,
-      body: Center(child: Text('Profil', style: TextStyle(color: Colors.white, fontSize: 24))),
+    return StreamBuilder(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, authSnapshot) {
+        final user = authSnapshot.data;
+
+        return Scaffold(
+          backgroundColor: AppColors.bgPrimary,
+          body: Stack(
+            children: [
+              Positioned(top: -60, right: -40, child: Container(width: 220, height: 220, decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(colors: [AppColors.purple.withOpacity(0.4), Colors.transparent])))),
+              Positioned(bottom: 100, left: -40, child: Container(width: 180, height: 180, decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(colors: [AppColors.pink.withOpacity(0.3), Colors.transparent])))),
+              SafeArea(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
+                  child: Column(
+                    children: [
+                      // Avatar
+                      Container(
+                        width: 80, height: 80,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: const LinearGradient(colors: [AppColors.purple, AppColors.pink]),
+                          boxShadow: [BoxShadow(color: AppColors.purple.withOpacity(0.4), blurRadius: 20, offset: const Offset(0, 8))],
+                        ),
+                        child: Center(
+                          child: Text(
+                            (user?.displayName ?? user?.email ?? 'U')[0].toUpperCase(),
+                            style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        user?.displayName ?? 'Kullanıcı',
+                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.textPrimary, letterSpacing: -0.5),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        user?.email ?? '',
+                        style: const TextStyle(fontSize: 13, color: AppColors.textTertiary),
+                      ),
+                      const SizedBox(height: 8),
+                      // Rol badge
+                      FutureBuilder<DocumentSnapshot>(
+                        future: user != null ? FirebaseFirestore.instance.collection('users').doc(user.uid).get() : null,
+                        builder: (context, snapshot) {
+                          final role = (snapshot.data?.data() as Map?)?['role'] ?? 'user';
+                          final isOrganizer = role == 'organizer';
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                            decoration: BoxDecoration(
+                              gradient: isOrganizer
+                                  ? const LinearGradient(colors: [AppColors.purple, AppColors.pink])
+                                  : null,
+                              color: isOrganizer ? null : AppColors.bgCard,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: isOrganizer ? Colors.transparent : AppColors.borderLight),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(isOrganizer ? Icons.event : Icons.person_outline_rounded, size: 14, color: isOrganizer ? Colors.white : AppColors.textTertiary),
+                                const SizedBox(width: 6),
+                                Text(
+                                  isOrganizer ? 'Organizatör' : 'Katılımcı',
+                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: isOrganizer ? Colors.white : AppColors.textTertiary),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 28),
+                      // İstatistikler
+                      StreamBuilder<QuerySnapshot>(
+                        stream: FirebaseFirestore.instance.collection('tickets').snapshots(),
+                        builder: (context, snapshot) {
+                          final ticketCount = snapshot.data?.docs.length ?? 0;
+                          final totalSpent = snapshot.data?.docs.fold<double>(0, (sum, doc) {
+                            final data = doc.data() as Map<String, dynamic>;
+                            return sum + (data['totalPrice'] as num? ?? 0).toDouble();
+                          }) ?? 0;
+
+                          return Row(
+                            children: [
+                              Expanded(child: _buildStatCard('Bilet', '$ticketCount', Icons.confirmation_number_outlined)),
+                              const SizedBox(width: 12),
+                              Expanded(child: _buildStatCard('Harcama', '₺${totalSpent.toStringAsFixed(0)}', Icons.payments_outlined)),
+                              const SizedBox(width: 12),
+                              Expanded(child: _buildStatCard('Etkinlik', '$ticketCount', Icons.event_outlined)),
+                            ],
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 24),
+                      // Menü öğeleri
+                      _buildMenuItem(Icons.confirmation_number_outlined, 'Biletlerim', 'Satın aldığın biletler', () => context.go('/tickets')),
+                      const SizedBox(height: 10),
+                      _buildMenuItem(Icons.history_rounded, 'İşlem Geçmişi', 'Tüm aktiviteler', () {}),
+                      const SizedBox(height: 10),
+                      _buildMenuItem(Icons.settings_outlined, 'Ayarlar', 'Hesap ayarları', () {}),
+                      const SizedBox(height: 24),
+                      // Çıkış yap
+                      GestureDetector(
+                        onTap: () async {
+                          await FirebaseAuth.instance.signOut();
+                          if (context.mounted) context.go('/login');
+                        },
+                        child: Container(
+                          width: double.infinity,
+                          height: 52,
+                          decoration: BoxDecoration(
+                            color: Colors.red.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.red.withOpacity(0.3)),
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.logout_rounded, color: Colors.redAccent, size: 18),
+                              SizedBox(width: 8),
+                              Text('Çıkış Yap', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.redAccent)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStatCard(String label, String value, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.bgCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.borderSubtle),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 20, color: AppColors.purpleLight),
+          const SizedBox(height: 8),
+          Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+          const SizedBox(height: 2),
+          Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textTertiary)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMenuItem(IconData icon, String title, String subtitle, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.bgCard,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.borderSubtle),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40, height: 40,
+              decoration: BoxDecoration(
+                color: AppColors.purple.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, size: 18, color: AppColors.purpleLight),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                  Text(subtitle, style: const TextStyle(fontSize: 12, color: AppColors.textTertiary)),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.textTertiary),
+          ],
+        ),
+      ),
     );
   }
 }
