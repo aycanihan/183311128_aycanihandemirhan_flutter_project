@@ -431,6 +431,10 @@ final _router = GoRouter(
       path: '/event/:id',
       builder: (context, state) => EventDetailScreen(eventId: state.pathParameters['id']!),
     ),
+    GoRoute(
+      path: '/buy/:id',
+      builder: (context, state) => BuyTicketScreen(eventId: state.pathParameters['id']!),
+    ),
     ShellRoute(
       builder: (context, state, child) => MainShell(child: child),
       routes: [
@@ -495,6 +499,8 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
 
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
@@ -751,6 +757,326 @@ class EventDetailScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+// ── BUY TICKET SCREEN ──
+class BuyTicketScreen extends StatefulWidget {
+  final String eventId;
+  const BuyTicketScreen({super.key, required this.eventId});
+
+  @override
+  State<BuyTicketScreen> createState() => _BuyTicketScreenState();
+}
+
+class _BuyTicketScreenState extends State<BuyTicketScreen> {
+  String _selectedTicketType = 'Standart';
+  int _quantity = 1;
+  bool _isLoading = false;
+
+  final Map<String, double> _ticketMultipliers = {
+    'VIP Alan': 2.0,
+    'Standart': 1.0,
+    'Öğrenci': 0.65,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.bgPrimary,
+      body: StreamBuilder<DocumentSnapshot>(
+        stream: FirebaseFirestore.instance.collection('events').doc(widget.eventId).snapshots(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: AppColors.purple));
+          final data = snapshot.data!.data() as Map<String, dynamic>;
+          final basePrice = (data['price'] as num).toDouble();
+          final selectedPrice = basePrice * _ticketMultipliers[_selectedTicketType]!;
+          final total = selectedPrice * _quantity;
+
+          return Stack(
+            children: [
+              Positioned(top: -60, right: -40, child: Container(width: 200, height: 200, decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(colors: [AppColors.purple.withOpacity(0.4), Colors.transparent])))),
+              Positioned(bottom: 100, left: -40, child: Container(width: 180, height: 180, decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(colors: [AppColors.pink.withOpacity(0.3), Colors.transparent])))),
+              SafeArea(
+                child: Column(
+                  children: [
+                    // Header
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          GestureDetector(
+                            onTap: () => context.go('/event/${widget.eventId}'),
+                            child: Container(
+                              width: 40, height: 40,
+                              decoration: BoxDecoration(color: AppColors.bgCard, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.borderSubtle)),
+                              child: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary, size: 20),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Bilet Seç', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary, letterSpacing: -0.3)),
+                              Text(data['title'] ?? '', style: const TextStyle(fontSize: 12, color: AppColors.textTertiary)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Etkinlik özeti
+                            Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(colors: [AppColors.purple.withOpacity(0.15), AppColors.pink.withOpacity(0.1)]),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: AppColors.purple.withOpacity(0.3)),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 48, height: 48,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(12),
+                                      gradient: const LinearGradient(colors: [AppColors.purple, AppColors.pink]),
+                                    ),
+                                    child: Center(child: Text((data['title'] as String)[0], style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white))),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(data['title'] ?? '', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                                        Text('${data['date']} · ${data['time']}', style: const TextStyle(fontSize: 12, color: AppColors.textTertiary)),
+                                        Text(data['venue'] ?? '', style: const TextStyle(fontSize: 12, color: AppColors.textTertiary)),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            const Text('BİLET TİPİ', style: TextStyle(fontSize: 11, color: AppColors.textTertiary, fontWeight: FontWeight.w700, letterSpacing: 0.1)),
+                            const SizedBox(height: 10),
+                            ..._ticketMultipliers.entries.map((entry) {
+                              final isSelected = _selectedTicketType == entry.key;
+                              final price = basePrice * entry.value;
+                              return GestureDetector(
+                                onTap: () => setState(() => _selectedTicketType = entry.key),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: isSelected ? AppColors.purple.withOpacity(0.12) : AppColors.bgCard,
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(color: isSelected ? AppColors.purple : AppColors.borderSubtle, width: isSelected ? 1.5 : 1),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 20, height: 20,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: isSelected ? AppColors.purple : AppColors.textTertiary, width: 1.5),
+                                          color: isSelected ? AppColors.purple.withOpacity(0.2) : Colors.transparent,
+                                        ),
+                                        child: isSelected ? const Icon(Icons.check, size: 12, color: AppColors.purpleLight) : null,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(entry.key, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: isSelected ? AppColors.textPrimary : AppColors.textSecondary)),
+                                      ),
+                                      Text('₺${price.toStringAsFixed(0)}', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: isSelected ? AppColors.purpleLight : AppColors.textTertiary)),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }),
+                            const SizedBox(height: 24),
+                            const Text('ADET', style: TextStyle(fontSize: 11, color: AppColors.textTertiary, fontWeight: FontWeight.w700, letterSpacing: 0.1)),
+                            const SizedBox(height: 10),
+                            Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(color: AppColors.bgCard, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.borderSubtle)),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text('Bilet adedi', style: TextStyle(fontSize: 14, color: AppColors.textSecondary)),
+                                  Row(
+                                    children: [
+                                      GestureDetector(
+                                        onTap: () { if (_quantity > 1) setState(() => _quantity--); },
+                                        child: Container(
+                                          width: 32, height: 32,
+                                          decoration: BoxDecoration(color: AppColors.bgPrimary, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.borderLight)),
+                                          child: const Icon(Icons.remove, size: 16, color: AppColors.textPrimary),
+                                        ),
+                                      ),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                                        child: Text('$_quantity', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+                                      ),
+                                      GestureDetector(
+                                        onTap: () { if (_quantity < 10) setState(() => _quantity++); },
+                                        child: Container(
+                                          width: 32, height: 32,
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(8),
+                                            gradient: const LinearGradient(colors: [AppColors.purple, AppColors.pink]),
+                                          ),
+                                          child: const Icon(Icons.add, size: 16, color: Colors.white),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            // Toplam
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: AppColors.bgCard,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: AppColors.borderSubtle),
+                              ),
+                              child: Column(
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Text('Bilet fiyatı', style: TextStyle(fontSize: 13, color: AppColors.textTertiary)),
+                                      Text('₺${selectedPrice.toStringAsFixed(0)}', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Text('Adet', style: TextStyle(fontSize: 13, color: AppColors.textTertiary)),
+                                      Text('x$_quantity', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                                    ],
+                                  ),
+                                  const Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 10),
+                                    child: Divider(color: AppColors.borderSubtle),
+                                  ),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Text('Toplam', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                                      Text('₺${total.toStringAsFixed(0)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.purpleLight)),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 100),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Satın al butonu
+              Positioned(
+                bottom: 0, left: 0, right: 0,
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+                  decoration: BoxDecoration(
+                    color: AppColors.bgPrimary.withOpacity(0.95),
+                    border: const Border(top: BorderSide(color: AppColors.borderSubtle)),
+                  ),
+                  child: _isLoading
+                      ? const Center(child: CircularProgressIndicator(color: AppColors.purple))
+                      : GestureDetector(
+                          onTap: () => _purchaseTicket(data, selectedPrice, total),
+                          child: Container(
+                            height: 54,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(16),
+                              gradient: const LinearGradient(colors: [AppColors.purple, AppColors.purpleLight, AppColors.pink]),
+                              boxShadow: [BoxShadow(color: AppColors.purple.withOpacity(0.4), blurRadius: 20, offset: const Offset(0, 8))],
+                            ),
+                            child: Center(
+                              child: Text('₺${total.toStringAsFixed(0)} · Satın Al', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white)),
+                            ),
+                          ),
+                        ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _purchaseTicket(Map<String, dynamic> eventData, double price, double total) async {
+    setState(() => _isLoading = true);
+    try {
+      final userId = FirebaseAuth.instance.currentUser?.uid ?? 'anonymous';
+      final eventTitle = eventData['title']?.toString() ?? '';
+      final eventDate = eventData['date']?.toString() ?? '';
+      final eventTime = eventData['time']?.toString() ?? '';
+      final venue = eventData['venue']?.toString() ?? '';
+
+      final ticketRef = await FirebaseFirestore.instance.collection('tickets').add({
+        'userId': userId,
+        'eventId': widget.eventId,
+        'eventTitle': eventTitle,
+        'eventDate': eventDate,
+        'eventTime': eventTime,
+        'venue': venue,
+        'ticketType': _selectedTicketType,
+        'quantity': _quantity,
+        'pricePerTicket': price,
+        'totalPrice': total,
+        'purchasedAt': FieldValue.serverTimestamp(),
+        'status': 'active',
+      });
+
+      await FirebaseFirestore.instance.collection('logs').add({
+        'userId': userId,
+        'action': 'ticket_purchased',
+        'ticketId': ticketRef.id,
+        'eventTitle': eventTitle,
+        'ticketType': _selectedTicketType,
+        'quantity': _quantity,
+        'totalPrice': total,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('🎉 Biletiniz satın alındı!'),
+            backgroundColor: AppColors.purple,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+        context.go('/tickets');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Hata: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 }
 
