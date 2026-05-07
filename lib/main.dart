@@ -19,16 +19,306 @@ class AppColors {
   static const textTertiary = Color(0x40FFFFFF);
   static const borderSubtle = Color(0x15FFFFFF);
   static const borderLight = Color(0x25FFFFFF);
+  static const orange = Color(0xFFF97316);
 }
 
 // ── SCREENS ──
-class DiscoverScreen extends StatelessWidget {
+class DiscoverScreen extends StatefulWidget {
   const DiscoverScreen({super.key});
   @override
+  State<DiscoverScreen> createState() => _DiscoverScreenState();
+}
+
+class _DiscoverScreenState extends State<DiscoverScreen> {
+  String _selectedCategory = 'Tümü';
+  final List<String> _categories = ['Tümü', 'Rock', 'Pop', 'Hip-Hop', 'Metal', 'EDM', 'Alternative', 'Electronic', 'R&B', 'Klasik', 'Indie', 'Psychedelic', 'Trip-Hop'];
+
+  @override
   Widget build(BuildContext context) {
-    return const Scaffold(
+    return Scaffold(
       backgroundColor: AppColors.bgPrimary,
-      body: Center(child: Text('Keşfet', style: TextStyle(color: Colors.white, fontSize: 24))),
+      body: Stack(
+        children: [
+          // Gradient arka plan
+          Positioned(top: -80, left: -60, child: Container(width: 280, height: 280, decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(colors: [AppColors.purple.withOpacity(0.5), Colors.transparent])))),
+          Positioned(top: 40, right: -60, child: Container(width: 220, height: 220, decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(colors: [AppColors.pink.withOpacity(0.4), Colors.transparent])))),
+          SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Merhaba 👋', style: TextStyle(fontSize: 13, color: AppColors.textTertiary)),
+                          const SizedBox(height: 2),
+                          Text(
+                            FirebaseAuth.instance.currentUser?.displayName?.split(' ').first ?? 'Kullanıcı',
+                            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.textPrimary, letterSpacing: -0.5),
+                          ),
+                        ],
+                      ),
+                      Container(
+                        width: 40, height: 40,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: const LinearGradient(colors: [AppColors.purple, AppColors.pink]),
+                        ),
+                        child: Center(
+                          child: Text(
+                            (FirebaseAuth.instance.currentUser?.displayName ?? 'U')[0].toUpperCase(),
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Arama
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.bgCard,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.borderSubtle),
+                    ),
+                    child: const TextField(
+                      style: TextStyle(color: AppColors.textPrimary, fontSize: 13),
+                      decoration: InputDecoration(
+                        hintText: 'Etkinlik, sanatçı, mekan ara...',
+                        hintStyle: TextStyle(color: AppColors.textTertiary, fontSize: 13),
+                        prefixIcon: Icon(Icons.search_rounded, color: AppColors.textTertiary, size: 20),
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                // Kategoriler
+                SizedBox(
+                  height: 34,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    itemCount: _categories.length,
+                    itemBuilder: (context, index) {
+                      final cat = _categories[index];
+                      final isSelected = cat == _selectedCategory;
+                      return GestureDetector(
+                        onTap: () => setState(() => _selectedCategory = cat),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          margin: const EdgeInsets.only(right: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(20),
+                            gradient: isSelected ? const LinearGradient(colors: [AppColors.purple, AppColors.pink]) : null,
+                            color: isSelected ? null : AppColors.bgCard,
+                            border: Border.all(color: isSelected ? Colors.transparent : AppColors.borderSubtle),
+                          ),
+                          child: Text(cat, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: isSelected ? Colors.white : AppColors.textTertiary)),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Etkinlik listesi
+                Expanded(
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: _selectedCategory == 'Tümü'
+                        ? FirebaseFirestore.instance.collection('events').snapshots()
+                        : FirebaseFirestore.instance.collection('events').where('category', isEqualTo: _selectedCategory).snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator(color: AppColors.purple));
+                      }
+                      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                        return const Center(child: Text('Etkinlik bulunamadı', style: TextStyle(color: AppColors.textTertiary)));
+                      }
+                      final events = snapshot.data!.docs;
+                      final featured = events.where((e) => (e.data() as Map)['isFeatured'] == true).toList();
+                      final regular = events.where((e) => (e.data() as Map)['isFeatured'] != true).toList();
+
+                      return ListView(
+                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+                        children: [
+                          if (featured.isNotEmpty) ...[
+                            const Text('ÖNE ÇIKAN', style: TextStyle(fontSize: 11, color: AppColors.textTertiary, fontWeight: FontWeight.w700, letterSpacing: 0.1)),
+                            const SizedBox(height: 10),
+                            ...featured.map((e) => _buildFeaturedCard(e)),
+                            const SizedBox(height: 20),
+                          ],
+                          if (regular.isNotEmpty) ...[
+                            const Text('YAKINDA', style: TextStyle(fontSize: 11, color: AppColors.textTertiary, fontWeight: FontWeight.w700, letterSpacing: 0.1)),
+                            const SizedBox(height: 10),
+                            ...regular.map((e) => _buildRegularCard(e)),
+                          ],
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFeaturedCard(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    return GestureDetector(
+      onTap: () => context.go('/event/${doc.id}'),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        height: 160,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [AppColors.purple.withOpacity(0.8), AppColors.pink.withOpacity(0.8)],
+          ),
+          border: Border.all(color: AppColors.borderLight),
+        ),
+        child: Stack(
+          children: [
+            // Grid doku
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                image: const DecorationImage(
+                  image: NetworkImage('https://picsum.photos/seed/bg/400/200'),
+                  fit: BoxFit.cover,
+                  opacity: 0.15,
+                ),
+              ),
+            ),
+            // Gradient overlay
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.transparent, Colors.black.withOpacity(0.7)],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.white.withOpacity(0.2)),
+                        ),
+                        child: Text(data['category'] ?? '', style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w600)),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(color: Colors.black.withOpacity(0.4), borderRadius: BorderRadius.circular(10)),
+                        child: Text('₺${data['price']}+', style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w700)),
+                      ),
+                    ],
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(data['title'] ?? '', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: -0.3)),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(Icons.calendar_today_rounded, size: 12, color: Colors.white70),
+                          const SizedBox(width: 4),
+                          Text(data['date'] ?? '', style: const TextStyle(fontSize: 12, color: Colors.white70)),
+                          const SizedBox(width: 10),
+                          const Icon(Icons.location_on_rounded, size: 12, color: Colors.white70),
+                          const SizedBox(width: 4),
+                          Expanded(child: Text(data['venue'] ?? '', style: const TextStyle(fontSize: 12, color: Colors.white70), overflow: TextOverflow.ellipsis)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRegularCard(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    return GestureDetector(
+      onTap: () => context.go('/event/${doc.id}'),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.bgCard,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.borderSubtle),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 56, height: 56,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                gradient: LinearGradient(
+                  colors: [AppColors.purple.withOpacity(0.6), AppColors.pink.withOpacity(0.6)],
+                ),
+              ),
+              child: Center(child: Text(data['title'][0], style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white))),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(data['title'] ?? '', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                  const SizedBox(height: 3),
+                  Text('${data['date']} · ${data['venue']}', style: const TextStyle(fontSize: 11, color: AppColors.textTertiary), overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(color: AppColors.purple.withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
+                    child: Text(data['category'] ?? '', style: const TextStyle(fontSize: 10, color: AppColors.purpleLight, fontWeight: FontWeight.w600)),
+                  ),
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text('₺${data['price']}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.purpleLight)),
+                const SizedBox(height: 4),
+                const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: AppColors.textTertiary),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -128,15 +418,6 @@ class _NavItem extends StatelessWidget {
 // ── ROUTER ──
 final _router = GoRouter(
   initialLocation: '/login',
-  redirect: (context, state) {
-    final user = FirebaseAuth.instance.currentUser;
-    final isLoggedIn = user != null;
-    final isLoggingIn = state.uri.toString() == '/login' || state.uri.toString() == '/register';
-
-    if (isLoggedIn && isLoggingIn) return '/discover';
-    if (!isLoggedIn && !isLoggingIn) return '/login';
-    return null;
-  },
   routes: [
     GoRoute(
       path: '/login',
@@ -145,6 +426,10 @@ final _router = GoRouter(
     GoRoute(
       path: '/register',
       builder: (context, state) => const RegisterScreen(),
+    ),
+    GoRoute(
+      path: '/event/:id',
+      builder: (context, state) => EventDetailScreen(eventId: state.pathParameters['id']!),
     ),
     ShellRoute(
       builder: (context, state, child) => MainShell(child: child),
@@ -156,6 +441,52 @@ final _router = GoRouter(
     ),
   ],
 );
+
+// ── SEED ──
+Future<void> seedEvents() async {
+  final firestore = FirebaseFirestore.instance;
+
+  final existing = await firestore.collection('events').limit(1).get();
+  if (existing.docs.isNotEmpty) {
+    print('✅ Etkinlikler zaten mevcut, seed atlandı.');
+    return;
+  }
+
+  final events = [
+    {'title': 'Guns N\'Roses', 'category': 'Rock', 'date': '2 Haziran 2025', 'time': '20:00', 'venue': 'BJK Tüpraş Stadyumu', 'city': 'İstanbul', 'price': 1000, 'imageUrl': 'https://picsum.photos/seed/gnr/400/200', 'description': '32 yıl sonra İstanbul\'da!', 'isFeatured': true},
+    {'title': 'Kanye West', 'category': 'Hip-Hop', 'date': '14 Haziran 2025', 'time': '21:00', 'venue': 'Ülker Arena', 'city': 'İstanbul', 'price': 1500, 'imageUrl': 'https://picsum.photos/seed/kanye/400/200', 'description': 'Donda World Tour İstanbul', 'isFeatured': true},
+    {'title': 'Gorillaz', 'category': 'Alternative', 'date': '5 Temmuz 2025', 'time': '20:30', 'venue': 'KüçükÇiftlik Park', 'city': 'İstanbul', 'price': 850, 'imageUrl': 'https://picsum.photos/seed/gorillaz/400/200', 'description': 'Cracker Island Tour', 'isFeatured': true},
+    {'title': 'Till Lindemann', 'category': 'Metal', 'date': '6 Aralık 2025', 'time': '20:00', 'venue': 'Volkswagen Arena', 'city': 'İstanbul', 'price': 900, 'imageUrl': 'https://picsum.photos/seed/lind/400/200', 'description': 'Meine Welt Avrupa Turnesi', 'isFeatured': true},
+    {'title': 'Coldplay', 'category': 'Pop', 'date': '28 Haziran 2025', 'time': '20:00', 'venue': 'Ülker Arena', 'city': 'İstanbul', 'price': 1300, 'imageUrl': 'https://picsum.photos/seed/coldplay/400/200', 'description': 'Music of the Spheres World Tour', 'isFeatured': true},
+    {'title': 'Radiohead', 'category': 'Rock', 'date': '18 Ağustos 2025', 'time': '20:00', 'venue': 'Parkorman', 'city': 'İstanbul', 'price': 1200, 'imageUrl': 'https://picsum.photos/seed/radiohead/400/200', 'description': 'The Bends 30th Anniversary Tour', 'isFeatured': true},
+    {'title': 'Arctic Monkeys', 'category': 'Rock', 'date': '3 Eylül 2025', 'time': '20:30', 'venue': 'Volkswagen Arena', 'city': 'İstanbul', 'price': 950, 'imageUrl': 'https://picsum.photos/seed/arctic/400/200', 'description': 'The Car World Tour', 'isFeatured': true},
+    {'title': 'Billie Eilish', 'category': 'Pop', 'date': '25 Haziran 2025', 'time': '20:00', 'venue': 'Ülker Arena', 'city': 'İstanbul', 'price': 1100, 'imageUrl': 'https://picsum.photos/seed/billie/400/200', 'description': 'Hit Me Hard and Soft Tour', 'isFeatured': true},
+    {'title': 'The Weeknd', 'category': 'R&B', 'date': '10 Temmuz 2025', 'time': '21:00', 'venue': 'Ülker Arena', 'city': 'İstanbul', 'price': 1300, 'imageUrl': 'https://picsum.photos/seed/weeknd/400/200', 'description': 'After Hours til Dawn Tour', 'isFeatured': true},
+    {'title': 'Massive Attack', 'category': 'Electronic', 'date': '15 Eylül 2025', 'time': '21:30', 'venue': 'KüçükÇiftlik Park', 'city': 'İstanbul', 'price': 700, 'imageUrl': 'https://picsum.photos/seed/massive/400/200', 'description': 'Mezzanine 25th Anniversary', 'isFeatured': false},
+    {'title': 'Portishead', 'category': 'Trip-Hop', 'date': '20 Eylül 2025', 'time': '21:00', 'venue': 'Zorlu PSM', 'city': 'İstanbul', 'price': 800, 'imageUrl': 'https://picsum.photos/seed/portishead/400/200', 'description': 'Nadir görülen bir gece', 'isFeatured': false},
+    {'title': 'Tame Impala', 'category': 'Psychedelic', 'date': '2 Ekim 2025', 'time': '20:30', 'venue': 'KüçükÇiftlik Park', 'city': 'İstanbul', 'price': 850, 'imageUrl': 'https://picsum.photos/seed/tame/400/200', 'description': 'Currents 10th Anniversary', 'isFeatured': true},
+    {'title': 'Tyler the Creator', 'category': 'Hip-Hop', 'date': '30 Haziran 2025', 'time': '21:00', 'venue': 'Volkswagen Arena', 'city': 'İstanbul', 'price': 950, 'imageUrl': 'https://picsum.photos/seed/tyler/400/200', 'description': 'Chromakopia World Tour', 'isFeatured': true},
+    {'title': 'FKA Twigs', 'category': 'Alternative', 'date': '17 Ekim 2025', 'time': '20:00', 'venue': 'Zorlu PSM', 'city': 'İstanbul', 'price': 600, 'imageUrl': 'https://picsum.photos/seed/fka/400/200', 'description': 'Eargasm gecesi', 'isFeatured': false},
+    {'title': 'Kendrick Lamar', 'category': 'Hip-Hop', 'date': '5 Kasım 2025', 'time': '21:00', 'venue': 'Ülker Arena', 'city': 'İstanbul', 'price': 1400, 'imageUrl': 'https://picsum.photos/seed/kendrick/400/200', 'description': 'Grand National Tour', 'isFeatured': true},
+    {'title': 'Kraftwerk', 'category': 'Electronic', 'date': '6 Aralık 2025', 'time': '20:00', 'venue': 'Volkswagen Arena', 'city': 'İstanbul', 'price': 900, 'imageUrl': 'https://picsum.photos/seed/kraft/400/200', 'description': '3D Concert Experience', 'isFeatured': false},
+    {'title': 'Mor ve Ötesi', 'category': 'Rock', 'date': '20 Haziran 2025', 'time': '21:00', 'venue': 'Harbiye Açıkhava', 'city': 'İstanbul', 'price': 400, 'imageUrl': 'https://picsum.photos/seed/morveotesi/400/200', 'description': 'Duvara Yazılan ve daha fazlası', 'isFeatured': false},
+    {'title': 'Tarkan', 'category': 'Pop', 'date': '27 Haziran 2025', 'time': '21:00', 'venue': 'Harbiye Açıkhava', 'city': 'İstanbul', 'price': 500, 'imageUrl': 'https://picsum.photos/seed/tarkan/400/200', 'description': 'Yaz gecesi efsanesi', 'isFeatured': false},
+    {'title': 'Limp Bizkit', 'category': 'Rock', 'date': '19 Temmuz 2025', 'time': '20:00', 'venue': 'Volkswagen Arena', 'city': 'İstanbul', 'price': 850, 'imageUrl': 'https://picsum.photos/seed/limpbizkit/400/200', 'description': 'Nookie\'yi canlı duyma vakti', 'isFeatured': true},
+    {'title': 'The Neighbourhood', 'category': 'Alternative', 'date': '9 Ağustos 2025', 'time': '20:30', 'venue': 'KüçükÇiftlik Park', 'city': 'İstanbul', 'price': 650, 'imageUrl': 'https://picsum.photos/seed/nbhd/400/200', 'description': 'Sweater Weather ve daha fazlası', 'isFeatured': false},
+    {'title': 'Paramore', 'category': 'Rock', 'date': '23 Ağustos 2025', 'time': '20:00', 'venue': 'KüçükÇiftlik Park', 'city': 'İstanbul', 'price': 750, 'imageUrl': 'https://picsum.photos/seed/paramore/400/200', 'description': 'This Is Why Tour', 'isFeatured': true},
+    {'title': 'Travis Scott', 'category': 'Hip-Hop', 'date': '4 Ekim 2025', 'time': '22:00', 'venue': 'Ülker Arena', 'city': 'İstanbul', 'price': 1200, 'imageUrl': 'https://picsum.photos/seed/travis/400/200', 'description': 'Utopia Circus Maximus Tour', 'isFeatured': true},
+    {'title': 'Hans Zimmer', 'category': 'Klasik', 'date': '11 Ekim 2025', 'time': '19:00', 'venue': 'Volkswagen Arena', 'city': 'İstanbul', 'price': 1100, 'imageUrl': 'https://picsum.photos/seed/hanszimmer/400/200', 'description': 'The World of Hans Zimmer — sinema müziğinin efsanesi', 'isFeatured': true},
+    {'title': 'Justin Timberlake', 'category': 'Pop', 'date': '18 Ekim 2025', 'time': '20:30', 'venue': 'Ülker Arena', 'city': 'İstanbul', 'price': 1000, 'imageUrl': 'https://picsum.photos/seed/jt/400/200', 'description': 'Forget Tomorrow World Tour', 'isFeatured': false},
+    {'title': 'YEBBA', 'category': 'R&B', 'date': '1 Kasım 2025', 'time': '20:00', 'venue': 'Zorlu PSM', 'city': 'İstanbul', 'price': 550, 'imageUrl': 'https://picsum.photos/seed/yebba/400/200', 'description': 'Soul sesinin büyüsü', 'isFeatured': false},
+    {'title': 'Miguel', 'category': 'R&B', 'date': '8 Kasım 2025', 'time': '20:30', 'venue': 'Zorlu PSM', 'city': 'İstanbul', 'price': 600, 'imageUrl': 'https://picsum.photos/seed/miguel/400/200', 'description': 'Wildheart Tour', 'isFeatured': false},
+    {'title': 'Kaytranada', 'category': 'EDM', 'date': '15 Kasım 2025', 'time': '22:00', 'venue': 'KüçükÇiftlik Park', 'city': 'İstanbul', 'price': 700, 'imageUrl': 'https://picsum.photos/seed/kaytra/400/200', 'description': 'Dans etmeden çıkamazsın', 'isFeatured': false},
+  ];
+
+  for (final event in events) {
+    await firestore.collection('events').add(event);
+  }
+  print('✅ ${events.length} etkinlik eklendi!');
+}
 
 // ── MAIN ──
 void main() async {
@@ -191,6 +522,234 @@ class EtkinlikApp extends StatelessWidget {
         ),
       ),
       routerConfig: _router,
+    );
+  }
+}
+
+// ── EVENT DETAIL SCREEN ──
+class EventDetailScreen extends StatelessWidget {
+  final String eventId;
+  const EventDetailScreen({super.key, required this.eventId});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.bgPrimary,
+      body: StreamBuilder<DocumentSnapshot>(
+        stream: FirebaseFirestore.instance.collection('events').doc(eventId).snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator(color: AppColors.purple));
+          }
+          if (!snapshot.hasData) return const Center(child: Text('Etkinlik bulunamadı', style: TextStyle(color: Colors.white)));
+
+          final data = snapshot.data!.data() as Map<String, dynamic>;
+
+          return Stack(
+            children: [
+              // Gradient hero
+              Container(
+                height: 280,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      AppColors.purple.withOpacity(0.9),
+                      AppColors.pink.withOpacity(0.8),
+                      AppColors.orange.withOpacity(0.6),
+                    ],
+                  ),
+                ),
+              ),
+              // Grid doku
+              Container(
+                height: 280,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.transparent, AppColors.bgPrimary],
+                  ),
+                ),
+              ),
+              SafeArea(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Back button
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: GestureDetector(
+                          onTap: () => context.go('/discover'),
+                          child: Container(
+                            width: 40, height: 40,
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.3),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppColors.borderLight),
+                            ),
+                            child: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 20),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 40),
+                      // Kategori badge
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.white.withOpacity(0.2)),
+                          ),
+                          child: Text(data['category'] ?? '', style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w600)),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      // Başlık
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Text(
+                          data['title'] ?? '',
+                          style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: -0.8, height: 1.1),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Text(data['venue'] ?? '', style: const TextStyle(fontSize: 13, color: Colors.white70)),
+                      ),
+                      const SizedBox(height: 24),
+                      // Info kartları
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Row(
+                          children: [
+                            _buildInfoChip(Icons.calendar_today_rounded, data['date'] ?? ''),
+                            const SizedBox(width: 8),
+                            _buildInfoChip(Icons.access_time_rounded, data['time'] ?? ''),
+                            const SizedBox(width: 8),
+                            _buildInfoChip(Icons.location_city_rounded, data['city'] ?? ''),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      // Açıklama
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: AppColors.bgCard,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: AppColors.borderSubtle),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Hakkında', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                              const SizedBox(height: 8),
+                              Text(data['description'] ?? '', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.6)),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      // Bilet tipleri
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('BİLET SEÇ', style: TextStyle(fontSize: 11, color: AppColors.textTertiary, fontWeight: FontWeight.w700, letterSpacing: 0.1)),
+                            const SizedBox(height: 10),
+                            _buildTicketOption('VIP Alan', 'Ön sıra · Ücretsiz içecek', (data['price'] as num) * 2),
+                            const SizedBox(height: 8),
+                            _buildTicketOption('Standart', '148 bilet mevcut', (data['price'] as num).toDouble()),
+                            const SizedBox(height: 8),
+                            _buildTicketOption('Öğrenci', 'Kimlik gerekli', (data['price'] as num) * 0.65),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      // Satın al butonu
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: GestureDetector(
+                          onTap: () => context.go('/buy/$eventId'),
+                          child: Container(
+                            width: double.infinity,
+                            height: 54,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(16),
+                              gradient: const LinearGradient(colors: [AppColors.purple, AppColors.purpleLight, AppColors.pink]),
+                              boxShadow: [BoxShadow(color: AppColors.purple.withOpacity(0.4), blurRadius: 20, offset: const Offset(0, 8))],
+                            ),
+                            child: const Center(
+                              child: Text('Bilet Satın Al →', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.3)),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 40),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildInfoChip(IconData icon, String text) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+        decoration: BoxDecoration(
+          color: AppColors.bgCard,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.borderSubtle),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 13, color: AppColors.purpleLight),
+            const SizedBox(width: 5),
+            Expanded(child: Text(text, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTicketOption(String name, String subtitle, num price) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.bgCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.borderSubtle),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+              const SizedBox(height: 2),
+              Text(subtitle, style: const TextStyle(fontSize: 11, color: AppColors.textTertiary)),
+            ],
+          ),
+          Text('₺${price.toStringAsFixed(0)}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.purpleLight)),
+        ],
+      ),
     );
   }
 }

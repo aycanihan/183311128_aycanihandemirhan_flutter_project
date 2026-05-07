@@ -5,7 +5,8 @@
       "Bash(flutter run *)",
       "Bash(taskkill /F /IM flutter.exe)",
       "Bash(taskkill /F /IM dart.exe)",
-      "Bash(flutter clean *)"
+      "Bash(flutter clean *)",
+      "Bash(flutter analyze *)"
     ]
   }
 }
